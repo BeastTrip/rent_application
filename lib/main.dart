@@ -3,13 +3,18 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:rent_application/repository/firestore_service.dart';
 import 'package:rent_application/screens/AuthScreen.dart';
+import 'package:rent_application/screens/TabNavigator.dart';
 import 'package:rent_application/theme/model_theme.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:beamer/beamer.dart';
+
+import 'models/ProfileModel.dart';
 
 //фоновое прослушивание уведомлений
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -35,10 +40,47 @@ class _MyAppState extends State<MyApp> {
   Map<String, dynamic> _deviceData = <String, dynamic>{};
   static final DeviceInfoPlugin deviceInfoPlugin = DeviceInfoPlugin();
 
+  static ProfileModel currentUser = new ProfileModel(uid: '', name: '');
+  static FirebaseAuth auth = FirebaseAuth.instance;
+  bool isLoadUser = true;
+
+  final routerDelegate = BeamerDelegate(
+    initialPath: '/a',
+    locationBuilder: RoutesLocationBuilder(
+      routes: {
+        '*': (context, state, data) => const ScaffoldWithBottomNavBar(),
+      },
+    ),
+  );
+
   @override
   void initState() {
     super.initState();
     initPlatformState();
+    _initCurrentUser();
+  }
+
+  _initCurrentUser() async {
+    if (auth.currentUser?.uid.isNotEmpty ?? false) {
+      bool value =
+          await FirestoreService.initCurrentUser(auth.currentUser!.uid);
+      setState(() {
+        isLoadUser = value;
+      });
+    } else {
+      setState(() {
+        isLoadUser = false;
+      });
+    }
+    if (isLoadUser) {
+      FirestoreService.getUserById(auth.currentUser!.uid).then((value) {
+        if (value != null) {
+          setState(() {
+            currentUser = ProfileModel.fromJson(value);
+          });
+        }
+      });
+    }
   }
 
   _initFirebaseAndoridPushSdk() async {
@@ -158,18 +200,61 @@ class _MyAppState extends State<MyApp> {
       child: Consumer<ModelTheme>(
           builder: (context, ModelTheme themeNotifier, child) {
         return MaterialApp(
-          title: 'Flutter Demo',
-          theme: themeNotifier.isDark
-              ? ThemeData(
-                  brightness: Brightness.dark,
-                )
-              : ThemeData(
-                  brightness: Brightness.light,
-                  primaryColor: Colors.blue[700],
-                  primarySwatch: Colors.blue),
-          debugShowCheckedModeBanner: false,
-          home: const AuthScreen(),
-        );
+            title: 'Flutter Demo',
+            theme: themeNotifier.isDark
+                ? ThemeData(
+                    brightness: Brightness.dark,
+                  )
+                : ThemeData(
+                    brightness: Brightness.light,
+                    primaryColor: Colors.blue[700],
+                    primarySwatch: Colors.blue),
+            debugShowCheckedModeBanner: false,
+            home: FutureBuilder(
+                future: Firebase.initializeApp(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    print('error');
+                  } else {
+                    if (currentUser.uid != '') {
+                      //Здесь возвращается нижняя панель навигации
+                      return ChangeNotifierProvider(
+                          create: (_) => ModelTheme(),
+                          child: Consumer<ModelTheme>(builder:
+                              (context, ModelTheme themeNotifier, child) {
+                            return MaterialApp.router(
+                              debugShowCheckedModeBanner: false,
+                              theme: themeNotifier.isDark
+                                  ? ThemeData(
+                                      brightness: Brightness.dark,
+                                    )
+                                  : ThemeData(
+                                      brightness: Brightness.light,
+                                      primaryColor: Colors.blue[700],
+                                      primarySwatch: Colors.blue),
+                              routerDelegate: routerDelegate,
+                              routeInformationParser: BeamerParser(),
+                              backButtonDispatcher: BeamerBackButtonDispatcher(
+                                delegate: routerDelegate,
+                              ),
+                            );
+                          }));
+                    } else if (!isLoadUser) {
+                      return AuthScreen();
+                    } else {
+                      return Scaffold(
+                        body: Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
+                  }
+                  return Scaffold(
+                    body: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }));
       }),
     );
   }
