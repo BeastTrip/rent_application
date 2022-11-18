@@ -7,7 +7,7 @@ import 'package:rent_application/models/ApartmentModel.dart';
 import 'package:rent_application/repository/firebase_auth.dart';
 import 'package:rent_application/repository/firebase_storage.dart';
 import 'package:rent_application/repository/firestore_service.dart';
-
+import 'package:permission_handler/permission_handler.dart';
 import 'package:rent_application/widgets/custom_snackBar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:multi_image_picker/multi_image_picker.dart';
@@ -252,31 +252,35 @@ class _AddApartmentsFormState extends State<AddApartmentsForm> {
                             top: 5,
                             right: 5,
                             child: InkWell(
-                              onTap: () {
-                                showDialog(
-                                    context: context,
-                                    builder: (context) => SimpleDialog(
-                                          title:
-                                              Text('Загрузить изображение из'),
-                                          children: [
-                                            SimpleDialogOption(
-                                              onPressed: () {
-                                                Navigator.pop(context);
-                                                _getImageAvatar(
-                                                    ImageSource.gallery);
-                                              },
-                                              child: Text('Галерея'),
-                                            ),
-                                            SimpleDialogOption(
-                                              onPressed: () {
-                                                Navigator.pop(context);
-                                                _getImageAvatar(
-                                                    ImageSource.camera);
-                                              },
-                                              child: Text('Камера'),
-                                            )
-                                          ],
-                                        ));
+                              onTap: () async {
+                                await Permission.camera.request();
+                                var status = await Permission.microphone.status;
+                                if (status.isGranted) {
+                                  showDialog(
+                                      context: context,
+                                      builder: (context) => SimpleDialog(
+                                            title: Text(
+                                                'Загрузить изображение из'),
+                                            children: [
+                                              SimpleDialogOption(
+                                                onPressed: () {
+                                                  Navigator.pop(context);
+                                                  _getImageAvatar(
+                                                      ImageSource.gallery);
+                                                },
+                                                child: Text('Галерея'),
+                                              ),
+                                              SimpleDialogOption(
+                                                onPressed: () {
+                                                  Navigator.pop(context);
+                                                  _getImageAvatar(
+                                                      ImageSource.camera);
+                                                },
+                                                child: Text('Камера'),
+                                              )
+                                            ],
+                                          ));
+                                }
                               },
                               child: Container(
                                 padding: EdgeInsets.symmetric(vertical: 15),
